@@ -197,8 +197,6 @@ class LocalCsvFileProducer(BaseProducer):
                         count += 1
                     if count >= self.num_files:
                         break
-        print(accum)
-        quit()
 
         np.savetxt(self.classratio_path, accum, fmt='%s')
 
