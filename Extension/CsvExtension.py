@@ -7,6 +7,7 @@ import numpy as np
 import os
 import tensorflow as tf
 import csv
+import scipy
 
 from slender.blob import Blob
 from slender.util import scope_join_fn
@@ -23,6 +24,7 @@ class LocalCsvFileProducer(BaseProducer):
         UNIFORM_SINGLE = 2
         RANDOM_MULTI = 3
         UNIFORM_MULTI = 4
+        FIX_RATIO_SINGLE = 5
 
     def __init__(self,
                  working_dir,
@@ -33,7 +35,7 @@ class LocalCsvFileProducer(BaseProducer):
                  filter_ops=None,
                  class_names=None,
                  batch_size=64,
-                 num_parallels=8,
+                 num_parallels=1,
                  sample_ratio=0.1,
                  mix_scheme=MixScheme.RANDOM_SINGLE):
         # workaround to avoid imagenet style file arrangment
@@ -164,7 +166,7 @@ class LocalCsvFileProducer(BaseProducer):
                     if count >= self.num_files:
                         break
         elif self.mix_scheme == LocalCsvFileProducer.MixScheme.RANDOM_MULTI:
-            while count < self.num_files:
+            while count < self.num_files*3:
                 random.shuffle(keys)
                 for key in keys:
                     file_names = list(self.filename_map[key])
@@ -172,12 +174,12 @@ class LocalCsvFileProducer(BaseProducer):
                     while len(file_names) < self.batch_size:
                         file_names = file_names*2
                     random.shuffle(file_names)
-                    file_names = filenames[0:self.batch_size]
+                    file_names = file_names[0:self.batch_size]
                     for repeat in xrange(self.batch_size):
                         yield file_names[repeat], self.label_map[key]
                         accum += self.label_map[key]
                         count += 1
-                    if count >= self.num_files:
+                    if count >= self.num_files*3:
                         break
         elif self.mix_scheme == LocalCsvFileProducer.MixScheme.UNIFORM_MULTI:
             while count < self.num_files:
@@ -190,15 +192,43 @@ class LocalCsvFileProducer(BaseProducer):
                     while len(file_names) < self.batch_size:
                         file_names = file_names*2
                     random.shuffle(file_names)
-                    file_names = filenames[0:self.batch_size]
+                    file_names = file_names[0:self.batch_size]
                     for repeat in xrange(self.batch_size):
                         yield file_names[repeat], self.label_map[key]
                         accum += self.label_map[key]
                         count += 1
                     if count >= self.num_files:
                         break
+        elif self.mix_scheme == LocalCsvFileProducer.MixScheme.FIX_RATIO_SINGLE:
+            while count < self.num_files:
+                random.shuffle(keys)
+                for key in keys:
+                    if not self.ratio_bound(accum, self.label_map[key]):
+                        continue
+                    file_names = list(self.filename_map[key])
+                    assert len(file_names) > 0
+                    random.shuffle(file_names)
+                    yield file_names[0], self.label_map[key]
+                    accum += self.label_map[key]
+                    count += 1
+                    if count >= self.num_files:
+                        break
 
+        print("Image class ratio")
+        print(accum)
         np.savetxt(self.classratio_path, accum, fmt='%s')
+
+    def ratio_bound(self, accum, label):
+        if random.random() < 0.1:
+            return True
+        else:
+            stable = accum + 1e-8
+            old_ratio = stable / np.sum(stable)
+            new_ratio = stable + label
+            new_ratio = new_ratio / np.sum(new_ratio)
+            old_en = scipy.stats.entropy(old_ratio, self.sample_ratio)
+            new_en = scipy.stats.entropy(new_ratio, self.sample_ratio)
+            return new_en <= old_en
 
     def entropy_bound(self, accum, label):
         if random.random() < self.sample_ratio:

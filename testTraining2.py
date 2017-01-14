@@ -5,7 +5,7 @@ from slender.processor import TrainProcessor as Processor
 from slender.net import TrainNet as Net
 from slender.util import new_working_dir
 import os
-
+import numpy as np
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 TYPE = 'price'
@@ -16,8 +16,9 @@ RELATIVE_PATH = ['restaurant_id', 'pic_type', 'pic_name']
 LABEL_OPS = lb.encode(TYPE)
 FILTER_OPS = (['pic_type', 'region_name', 'night_price_2', 'restaurant_id'],
               lambda x, y, z, w: not(x == 'Dish' and hash(y)%4 == 0 and z != '0' and hash(w)%7 != 0))
-LEARNING_RATE = 5e-2
+LEARNING_RATE = 0.1
 
+RATIO = np.loadtxt('ratio.txt', delimiter=',')
 
 BATCH_SIZE = 64
 GPU_FRAC = 0.5
@@ -33,8 +34,8 @@ producer = Producer(
     label_ops = LABEL_OPS,
     filter_ops = FILTER_OPS,
     class_names = lb.classnames(TYPE),
-    mix_scheme = 2,
-    sample_ratio = 0.3,
+    mix_scheme = 5,
+    sample_ratio = RATIO,
 )
 
 processor = Processor()
@@ -47,5 +48,5 @@ net = Net(
 )
 
 blob = producer.blob().func(processor.preprocess).func(net.forward)
+net.eval(NUM_TRAIN_EPOCHS * producer.num_batches_per_epoch, save_interval_secs=600)
 
-net.eval(NUM_TRAIN_EPOCHS * producer.num_batches_per_epoch, save_interval_secs=1800)

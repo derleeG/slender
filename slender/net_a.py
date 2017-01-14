@@ -29,17 +29,14 @@ class BaseNet(object):
     __metaclass__ = abc.ABCMeta
 
     _METRIC_ATTRS = [
-#        'conf_loss',
-#        'train_ratio',
-#        'closs',
         'loss',
         'total_loss',
         'accuracy',
     ]
     _OUTPUT_FLATTENED_ATTRS = [
-        'targets',
+        'flabels',
         'logits',
-        'predictions',
+        'predicted_labels',
     ]
 
     @staticmethod
@@ -94,44 +91,26 @@ class BaseNet(object):
                 )
                 self.logits = net = slim.conv2d(
                     net,
-                    self.num_classes,
+                    (self.num_classes-1)*2,
                     (1, 1),
                     activation_fn=None,
                     normalizer_fn=None,
                     scope='logits',
                 )
                 self.predictions = net = slim.softmax(
-                    net,
+                    tf.reshape(net,[-1, 1, 1,self.num_classes-1, 2]),
                     scope='predictions',
                 )
-#                self.conf = slim.conv2d(
-#                    self.feats,
-#                    1,
-#                    (1, 1),
-#                    activation_fn=tf.nn.sigmoid,
-#                    normalizer_fn=None,
-#                    scope='confidence',
-#                )
-#                self.conf_flattened = tf.squeeze(self.conf, (1, 2, 3))
-
-
+                self.predictions = self.predictions[:,:,:,:,1]
+                self.flabels = tf.to_float(self.labels)
                 self.predictions_flattened = tf.squeeze(self.predictions, (1, 2))
-                #self.targets = tf.one_hot(self.labels, self.num_classes)                   #//
-                self.targets = tf.to_float(self.labels)                                     #//
+                idx = tf.argmax(tf.to_float(self.labels), 1 )
+                self.targets = tf.pack([idx > 0, idx > 1, idx > 2], axis=1)
                 self.loss = slim.losses.log_loss(self.predictions_flattened, self.targets, weight=self.num_classes)
-#                losses = -self.targets*tf.log(self.predictions_flattened + 1e-7) - (1-self.targets)*tf.log(1 - self.predictions_flattened + 1e-7)
-#                losses = tf.reduce_sum(losses, reduction_indices=1)
-#                self.closs = tf.reduce_mean(losses)
-#                inlier = tf.to_float(losses < self.closs)
-#                self.train_ratio = tf.reduce_mean(inlier)
-#                self.loss = tf.reduce_sum(losses*inlier)/tf.reduce_sum(inlier)
-                
-#                self.conf_loss = slim.losses.log_loss(self.conf_flattened, inlier)
-                self.total_loss = slim.losses.get_total_loss() #+ self.loss 
+                self.total_loss = slim.losses.get_total_loss()
 
-                self.predicted_labels = tf.argmax(self.predictions_flattened, 1)
-                self.predicted_labels = tf.one_hot(self.predicted_labels, self.num_classes) #//
-                #self.accuracy = slim.metrics.accuracy(self.predicted_labels, self.labels)  #//
+                self.predicted_labels = tf.reduce_sum(tf.to_int32(self.predictions_flattened > 0.5), 1)
+                self.predicted_labels = tf.one_hot(self.predicted_labels, self.num_classes) 
                 self.accuracy = tf.reduce_mean(self.predicted_labels*tf.to_float(self.labels))
                 self.accuracy = self.accuracy*self.num_classes
 

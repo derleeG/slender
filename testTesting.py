@@ -9,9 +9,9 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 TYPE = 'price'
-IMAGE_DIR = '/home/derlee/tabelog_pictures/'
+IMAGE_DIR = '/mnt/data/tabelog_pictures/'
 WORKING_DIR = latest_working_dir('/home/derlee/Resnet_slender/')
-CSV_DIR = '/home/derlee/tabelog_csv/'
+CSV_DIR = '/mnt/data/tabelog_csv/'
 RELATIVE_PATH = ['restaurant_id', 'pic_type', 'pic_name']
 LABEL_OPS = lb.encode(TYPE)
 FILTER_OPS = (['pic_type', 'region_name', 'night_price_2', 'restaurant_id'],
